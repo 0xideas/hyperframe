@@ -15,10 +15,10 @@ def nest(l, n=1):
         return([nest(l, n-1)]*len(l))
 
 def build_dim_labels(m):
-    return(ridict(list(alphabet[:m])))
+    return(list(alphabet[:m]))
 
 def build_val_labels(m, n):
-    return(dict(zip(alphabet, [ridict(list(alphabet.upper()[:n])) for _ in range(m)])))
+    return(dict(zip(alphabet, [list(alphabet.upper()[:n]) for _ in range(m)])))
 
 
 #initialisation
@@ -88,7 +88,6 @@ class HyperFrame:
 
 
     def copy(self):
-        print("copy called!!")
         index_labels = OrderedDict({k: rilist(v) for k, v in self.rval_labels.items()})
         return(HyperFrame( ilist(self.dim_labels), index_labels , self.data.copy()))
     
@@ -184,8 +183,6 @@ class HyperFrame:
         self.validate_dict(dim_labels, len(data.shape))
         
         for dim, dim_label in dim_labels.items():
-            print(dim_labels)
-            print(val_labels.keys())
             assert dim_label in val_labels.keys()
             
             self.validate_dict(val_labels[dim_label], data.shape[dim])
