@@ -1,24 +1,38 @@
 import numpy as np
 import pandas as pd
+from collections import OrderedDict
 
 
 #for testing
 alphabet = "abcdefghijklmnopqrstuvwxyz"
 
 def nest(l, n=1):
-    if n == 1:
+    if n == 0:
+        return(None)
+    elif n == 1:
         return(l)
     else:
-        return([nest(l, n-1), nest(l, n-1)])
+        return([nest(l, n-1)]*len(l))
 
 def build_dim_labels(m):
-    return(idict(list(alphabet[:m])))
+    return(ridict(list(alphabet[:m])))
 
 def build_val_labels(m, n):
-    return(dict(zip(alphabet, [idict(list(alphabet.upper()[:n])) for _ in range(m)])))
+    return(dict(zip(alphabet, [ridict(list(alphabet.upper()[:n])) for _ in range(m)])))
 
 
+#initialisation
+def constant_array(constant, *args):
+    if len(args) == 0:
+        return(constant)
+    else:
+        return(np.array([constant_array(constant, *args[1:])]*args[0]))
 
+def zeros(*args):
+    return(constant_array(0.0, *args))
+
+def ones(*args):
+    return(constant_array(1.0, *args))
 
 #helpers
 def unnest(l):
@@ -33,21 +47,37 @@ def mlist(x):
         return([x])
 
 def idict(list_):
-    return(dict(zip(range(len(list_)), list_)))
+    return(OrderedDict(zip(range(len(list_)), list_)))
+
+#reverse of idict
+def ridict(list_):
+    return(OrderedDict({v:k for k, v in idict(list_).items()}))
 
 class HyperFrame:
-    def __init__(self, data, dim_labels, val_labels):
+    def __init__(self, dimension_labels, index_labels, data=None):
+
+        dimension_labels = OrderedDict(dimension_labels)
+        index_labels = OrderedDict(index_labels)
+
+        #refactor to make this reversal unnessecary
+        self.dim_labels = OrderedDict({v: k for k, v in dimension_labels.items()})
+        self.val_labels = OrderedDict({k: {v2: k2 for k2, v2 in v.items()} for k, v in index_labels.items()})
         
-        self.validate_data(data, dim_labels, val_labels)
+        self.rdim_labels = dimension_labels
+        self.rval_labels = index_labels
+        
+
+        if data is None:
+            data = zeros(*[len(self.val_labels[dim_label]) for _, dim_label in self.dim_labels.items()])
+        
+        self.validate_data(data, self.dim_labels, self.val_labels)
+
         self.data = data
-        self.dim_labels = dim_labels
-        self.val_labels = val_labels
-        
-        self.rdim_labels = {v: k for k, v in dim_labels.items()}
-        self.rval_labels = {k: {v2: k2 for k2, v2 in v.items()} for k, v in val_labels.items()}
-        
+
+
+
     def copy(self):
-        return(HyperFrame(self.data.copy(), dict(self.dim_labels), dict(self.val_labels)))
+        return(HyperFrame( dict(self.dim_labels), dict(self.val_labels), self.data.copy()))
     
     def iget(self, **kwargs):
         """
@@ -69,7 +99,7 @@ class HyperFrame:
         indices = self.construct_indices(kwargs, ndata.shape)
         ndata = eval("ndata[{}]".format(indices))
             
-        hdata = HyperFrame(ndata, ndim_labels, nval_labels)
+        hdata = HyperFrame(ndim_labels, nval_labels, ndata)
         return(hdata)
     
     def sort_dict(self, dict_):
@@ -114,6 +144,7 @@ class HyperFrame:
         for dim_label, target_labels in kwargs.items():
             dim = self.rdim_labels[dim_label]
             target_indices = {dim:[self.rval_labels[dim_label][target] for target in target_labels]}
+
             for k, v in target_indices.items():
                 v2 = v if len(v) > 1 else v[0]
                 numpy_indices[k] = str(v2)
