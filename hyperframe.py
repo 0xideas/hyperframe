@@ -49,22 +49,33 @@ def mlist(x):
 def idict(list_):
     return(OrderedDict(zip(range(len(list_)), list_)))
 
-#reverse of idict
+#reverse k, v for idict
 def ridict(list_):
     return(OrderedDict({v:k for k, v in idict(list_).items()}))
+
+
+def ilist(dict_):
+    return(list(dict_.values()))
+
+def rilist(dict_):
+    return(list(dict_.keys()))
 
 class HyperFrame:
     def __init__(self, dimension_labels, index_labels, data=None):
 
-        dimension_labels = OrderedDict(dimension_labels)
+        assert isinstance(dimension_labels, list)
+
+        for k, v in index_labels.items():
+            assert( isinstance(v, list))
+
         index_labels = OrderedDict(index_labels)
 
         #refactor to make this reversal unnessecary
-        self.dim_labels = OrderedDict({v: k for k, v in dimension_labels.items()})
-        self.val_labels = OrderedDict({k: {v2: k2 for k2, v2 in v.items()} for k, v in index_labels.items()})
+        self.dim_labels = idict(dimension_labels)
+        self.val_labels = OrderedDict({k: idict(v) for k, v in index_labels.items()})
         
-        self.rdim_labels = dimension_labels
-        self.rval_labels = index_labels
+        self.rdim_labels = ridict(dimension_labels)
+        self.rval_labels = OrderedDict({k: ridict(v) for k, v in index_labels.items()})
         
 
         if data is None:
@@ -77,7 +88,9 @@ class HyperFrame:
 
 
     def copy(self):
-        return(HyperFrame( dict(self.dim_labels), dict(self.val_labels), self.data.copy()))
+        print("copy called!!")
+        index_labels = OrderedDict({k: rilist(v) for k, v in self.rval_labels.items()})
+        return(HyperFrame( ilist(self.dim_labels), index_labels , self.data.copy()))
     
     def iget(self, **kwargs):
         """
@@ -89,10 +102,10 @@ class HyperFrame:
                        for i, v in self.dim_labels.items()
                        if v not in kwargs.keys() or len(kwargs[v]) > 1]
 
-        ndim_labels = idict([x[1] for x in sorted(ndim_labels, key=lambda y: y[0])])
+        ndim_labels = [x[1] for x in sorted(ndim_labels, key=lambda y: y[0])]
         
         nval_labels = {k: kwargs.get(k, v) for k, v in self.val_labels.items() if len(kwargs.get(k, v)) > 1}
-        nval_labels = {k: (v if isinstance(v, dict) else idict(mlist(v))) for k, v in nval_labels.items()}
+        nval_labels = {k: (mlist(v) if not isinstance(v, dict) else list(v.values())) for k, v in nval_labels.items()}
 
         ndata = self.data.copy()
 
@@ -130,7 +143,7 @@ class HyperFrame:
         
         self.validate_kwargs(kwargs)
         
-        assert self.hget(**kwargs).data.shape == new_data.shape 
+        assert self.iget(**kwargs).data.shape == new_data.shape 
         
         hframe = self.copy()
             
@@ -171,6 +184,8 @@ class HyperFrame:
         self.validate_dict(dim_labels, len(data.shape))
         
         for dim, dim_label in dim_labels.items():
+            print(dim_labels)
+            print(val_labels.keys())
             assert dim_label in val_labels.keys()
             
             self.validate_dict(val_labels[dim_label], data.shape[dim])
