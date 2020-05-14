@@ -95,7 +95,10 @@ class HyperFrame:
         """
         get the HyperFrame with the 
         """
+        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()])
+
         self.validate_kwargs(kwargs)
+
                         
         ndim_labels = [(i, v)
                        for i, v in self.dim_labels.items()
@@ -139,9 +142,11 @@ class HyperFrame:
     
     
     def iset(self, new_data,  **kwargs):
-        
+        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()])
+
         self.validate_kwargs(kwargs)
-        
+
+
         assert self.iget(**kwargs).data.shape == new_data.shape 
         
         hframe = self.copy()
