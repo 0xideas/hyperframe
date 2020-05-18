@@ -127,23 +127,23 @@ class HyperFrame:
         assert len(args) > 0 and len(args) < 3
 
         kwargs = {v: self.val_labels[v][0] for i, v in self.dim_labels.items() if v not in args}
+        print(kwargs)
         subset = self.iget(**kwargs)
-
         
         if return_type is None:
-            return((kwargs, subset))
+            return( subset)
         elif return_type == "numpy":
-            return((kwargs, subset.data))
+            return(subset.data)
         elif return_type == "pandas":            
-            indices = [[v2 for k2, v2 in self.sort_dict(v)] 
-                       for k, v in self.sort_dict(subset.val_labels)]
+            indices = [[v2 for k2, v2 in self.sort_dict(subset.val_labels[v])] 
+                       for k, v in self.sort_dict(subset.dim_labels)]
             
             assert len(indices) == len(args)
-            
+
             index = indices[0]
-            columns = indices[1]
+            columns = indices[1]            
             
-            return((kwargs, pd.DataFrame(subset.data, columns = columns, index=index)))
+            return(pd.DataFrame(subset.data, columns = columns, index=index))
     
     
     def iset(self, new_data, copy=False,  **kwargs):
@@ -182,7 +182,6 @@ class HyperFrame:
 
     
     def validate_kwargs(self, kwargs):
-        assert(len(kwargs) > 0)
         for key, value in kwargs.items():
             try:
                 assert key in self.dim_labels.values()
