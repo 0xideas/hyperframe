@@ -91,7 +91,7 @@ class HyperFrame:
         index_labels = OrderedDict({k: rilist(v) for k, v in self.rval_labels.items()})
         return(HyperFrame( ilist(self.dim_labels), index_labels , self.data.copy()))
     
-    def iget(self, **kwargs):
+    def iget(self, copy=False, **kwargs):
         """
         get the HyperFrame with the 
         """
@@ -109,11 +109,14 @@ class HyperFrame:
         nval_labels = {k: kwargs.get(k, v) for k, v in self.val_labels.items() if len(kwargs.get(k, v)) > 1}
         nval_labels = {k: (mlist(v) if not isinstance(v, dict) else list(v.values())) for k, v in nval_labels.items()}
 
-        ndata = self.data.copy()
+        if copy:
+            ndata = self.data.copy()
+        else:
+            ndata = self.data
 
         indices = self.construct_indices(kwargs, ndata.shape)
         ndata = eval("ndata[{}]".format(indices))
-            
+
         hdata = HyperFrame(ndim_labels, nval_labels, ndata)
         return(hdata)
     
@@ -122,13 +125,15 @@ class HyperFrame:
     
     def iget0(self, *args, return_type=None):
         assert len(args) > 0 and len(args) < 3
+
         kwargs = {v: self.val_labels[v][0] for i, v in self.dim_labels.items() if v not in args}
         subset = self.iget(**kwargs)
+
         
         if return_type is None:
-            return(subset)
+            return((kwargs, subset))
         elif return_type == "numpy":
-            return(subset.data)
+            return((kwargs, subset.data))
         elif return_type == "pandas":            
             indices = [[v2 for k2, v2 in self.sort_dict(v)] 
                        for k, v in self.sort_dict(subset.val_labels)]
@@ -138,19 +143,26 @@ class HyperFrame:
             index = indices[0]
             columns = indices[1]
             
-            return(pd.DataFrame(subset.data, columns = columns, index=index))
+            return((kwargs, pd.DataFrame(subset.data, columns = columns, index=index)))
     
     
-    def iset(self, new_data,  **kwargs):
+    def iset(self, new_data, copy=False,  **kwargs):
         kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()])
 
         self.validate_kwargs(kwargs)
 
+        test1 = np.issubdtype(type(new_data), np.number)
+        test2 = np.issubdtype(type(self.iget(**kwargs).data), np.number)
 
-        assert self.iget(**kwargs).data.shape == new_data.shape 
+        test3 = type(new_data) == type(np.array([0]))
+
+        assert test3 or (test1 and test2)
         
-        hframe = self.copy()
-            
+        if copy:
+            hframe = self.copy()
+        else:
+            hframe = self
+
         indices = self.construct_indices(kwargs, hframe.data.shape)
         exec("hframe.data[{}] = new_data".format(indices))
             
@@ -172,16 +184,20 @@ class HyperFrame:
     def validate_kwargs(self, kwargs):
         assert(len(kwargs) > 0)
         for key, value in kwargs.items():
-            assert key in self.dim_labels.values()
-            
-            assert(len(value) > 0)
-            for v in value:
-                assert(v in self.val_labels[key].values())
+            try:
+                assert key in self.dim_labels.values()
+                
+                assert(len(value) > 0)
+                for v in value:
+                    assert(v in self.val_labels[key].values())
+            except:
+                print("{}\n{}\n\n{}\n{}\n".format(key, self.dim_labels.values(), value, self.val_labels[key].values()))
+                raise Exception("illegal argument provided")
         
     
     def validate_data(self, data, dim_labels, val_labels):
 
-        assert isinstance(data, type(np.array([0])))
+        assert isinstance(data, type(np.array([0]))) or np.issubdtype(type(data), np.number)
         
         assert len(dim_labels) == len(val_labels)
         
