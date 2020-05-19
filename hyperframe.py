@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
 from collections import OrderedDict
-
-
+import os
+import json
+import shutil
+import subprocess
 #for testing
 alphabet = "abcdefghijklmnopqrstuvwxyz"
 
@@ -81,10 +83,9 @@ class HyperFrame:
         if data is None:
             data = zeros(*[len(self.val_labels[dim_label]) for _, dim_label in self.dim_labels.items()])
         
-        self.validate_data(data, self.dim_labels, self.val_labels)
+        HyperFrame.validate_data(data, self.dim_labels, self.val_labels)
 
         self.data = data
-
 
 
     def copy(self):
@@ -120,6 +121,7 @@ class HyperFrame:
         hdata = HyperFrame(ndim_labels, nval_labels, ndata)
         return(hdata)
     
+
     def sort_dict(self, dict_):
         return([(k, v) for k, v in sorted(list(dict_.items()), key= lambda x: x[0])])
     
@@ -194,25 +196,82 @@ class HyperFrame:
                 raise Exception("illegal argument provided")
         
     
-    def validate_data(self, data, dim_labels, val_labels):
+    @staticmethod
+    def validate_data(data, dim_labels, val_labels):
 
         assert isinstance(data, type(np.array([0]))) or np.issubdtype(type(data), np.number)
         
         assert len(dim_labels) == len(val_labels)
         
-        self.validate_dict(dim_labels, len(data.shape))
+        HyperFrame.validate_dict(dim_labels, len(data.shape))
         
         for dim, dim_label in dim_labels.items():
             assert dim_label in val_labels.keys()
             
-            self.validate_dict(val_labels[dim_label], data.shape[dim])
-            
-    def validate_dict(self, dict_, dims):
+            HyperFrame.validate_dict(val_labels[dim_label], data.shape[dim])
+    
+    @staticmethod
+    def validate_dict(dict_, dims):
         assert len(dict_) == dims
-        assert self.dense_keys(dict_)
+        assert HyperFrame.dense_keys(dict_)
         
-        
-    def dense_keys(self, dict_):
+    @staticmethod
+    def dense_keys(dict_):
         dict_keys = dict_.keys()
         return np.all([x in dict_keys for x in range(len(dict_))])
+
+    def strip_path(self, path):
+        if "." in path[-5:-3]:
+            path = ".".join(path.split(".")[:-1]) 
+        return(path)
+
+    def write_file(self, path):
+
+        path = self.strip_path(path)
+
+        dir_ = path+"/"
+        os.mkdir(dir_)
+
+        with open(os.path.join(dir_, "labels.json"), "w") as f:
+            f.write(json.dumps({"dim_labels": self.dim_labels,
+                                "rdim_labels": self.rdim_labels,
+                                "val_labels": self.val_labels,
+                                "rval_labels": self.rval_labels}))
+
+        np.save(os.path.join(dir_, "data"), self.data)
+
+        
+        subprocess.run(["zip", "-r", path + ".zip", "-j", dir_])
+        subprocess.run(["rm", "-r", dir_])
+        subprocess.run(["mv", path + ".zip", path + ".hyperframe" ])
+
+    @classmethod
+    def read_file(clf, path):
+
+        path = clf.strip_path(clf, path)
+
+        dir_ = path+"/"
+
+        subprocess.run(["mv", path + ".hyperframe", path + ".zip" ])
+        subprocess.run(["unzip", path + ".zip", "-d", dir_])
+        subprocess.run(["mv", path + ".zip", path + ".hyperframe" ])
+
+        data = np.load(os.path.join(dir_, "data.npy"))
+
+        with open(os.path.join(dir_, "labels.json"), "r") as f:
+            labels = json.loads(f.read())
+
+        subprocess.run(["rm", "-r", dir_ ])
+
+        hc = HyperFrame(ilist(labels["dim_labels"]), {k: ilist(v) for k, v in labels["val_labels"].items()}, data)
+
+        return(hc)
+
+
+
+
+
+
+
+
     
