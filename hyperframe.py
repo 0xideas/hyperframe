@@ -5,6 +5,7 @@ import os
 import json
 import shutil
 import subprocess
+import warnings
 #for testing
 alphabet = "abcdefghijklmnopqrstuvwxyz"
 
@@ -115,12 +116,17 @@ class HyperFrame:
         else:
             ndata = self.data
 
+        #indices = self.construct_indices_string(kwargs, ndata.shape)
+
+        #ndata = eval("ndata[{}]".format(indices))
+
         indices = self.construct_indices(kwargs, ndata.shape)
-        ndata = eval("ndata[{}]".format(indices))
+        ndata = ndata[np.ix_(*indices)]
+        ndata = ndata.reshape(*[x for x in ndata.shape if x > 1]) 
 
         hdata = HyperFrame(ndim_labels, nval_labels, ndata)
         return(hdata)
-    
+   
 
     def sort_dict(self, dict_):
         return([(k, v) for k, v in sorted(list(dict_.items()), key= lambda x: x[0])])
@@ -165,12 +171,17 @@ class HyperFrame:
         else:
             hframe = self
 
+        #indices = self.construct_indices_string(kwargs, hframe.data.shape)
+        #exec("hframe.data[{}] = new_data".format(indices))
+
         indices = self.construct_indices(kwargs, hframe.data.shape)
-        exec("hframe.data[{}] = new_data".format(indices))
+        hframe.data[np.ix_(*indices)] = new_data.reshape([len(x) for x in indices])
+
+        #hframe = self._iset_ndata(hframe.data, new_data, indices)
             
         return(hframe)
     
-    def construct_indices(self, kwargs, shape):
+    def construct_indices_string(self, kwargs, shape):
         numpy_indices = [":"]*len(shape)
         for dim_label, target_labels in kwargs.items():
             dim = self.rdim_labels[dim_label]
@@ -181,6 +192,18 @@ class HyperFrame:
                 numpy_indices[k] = str(v2)
                 
         return(",".join(numpy_indices))
+
+    def construct_indices(self, kwargs, shape):
+        numpy_indices = [list(range(x)) for x in shape]
+        for dim_label, target_labels in kwargs.items():
+            dim = self.rdim_labels[dim_label]
+            target_indices = {dim:[self.rval_labels[dim_label][target] for target in target_labels]}
+
+            for k, v in target_indices.items():
+                v2 = v if len(v) > 1 else v[0]
+                numpy_indices[k] = v
+
+        return(numpy_indices)
 
     
     def validate_kwargs(self, kwargs):
@@ -220,9 +243,13 @@ class HyperFrame:
         dict_keys = dict_.keys()
         return np.all([x in dict_keys for x in range(len(dict_))])
 
-    def strip_path(self, path):
-        if "." in path[-5:-3]:
+    @staticmethod
+    def strip_path(path):
+        filename = path.split("/")[-1]
+        if "." in filename and filename.split(".")[:-1] in ["csv", "txt", "hyperframe"]:
             path = ".".join(path.split(".")[:-1]) 
+
+            warnings.warn("path changed to: {}".format(path))
         return(path)
 
     def write_file(self, path):
@@ -245,10 +272,10 @@ class HyperFrame:
         subprocess.run(["rm", "-r", dir_])
         subprocess.run(["mv", path + ".zip", path + ".hyperframe" ])
 
-    @classmethod
-    def read_file(clf, path):
+    @staticmethod
+    def read_file(path):
 
-        path = clf.strip_path(clf, path)
+        path = HyperFrame.strip_path(path)
 
         dir_ = path+"/"
 
@@ -263,9 +290,7 @@ class HyperFrame:
 
         subprocess.run(["rm", "-r", dir_ ])
 
-        hc = HyperFrame(ilist(labels["dim_labels"]), {k: ilist(v) for k, v in labels["val_labels"].items()}, data)
-
-        return(hc)
+        return(HyperFrame(ilist(labels["dim_labels"]), {k: ilist(v) for k, v in labels["val_labels"].items()}, data))
 
 
 
