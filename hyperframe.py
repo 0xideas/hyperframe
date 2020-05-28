@@ -6,65 +6,92 @@ import json
 import shutil
 import subprocess
 import warnings
-#for testing
-alphabet = "abcdefghijklmnopqrstuvwxyz"
 
-def nest(l, n=1):
-    if n == 0:
+
+def nest(l, depth=1, reps=1):
+    """create a nested list of depth 'depth' and with 'reps' repititions"""
+    if depth == 0:
         return(None)
-    elif n == 1:
+    elif depth == 1:
         return(l)
     else:
-        return([nest(l, n-1)]*len(l))
-
-def build_dim_labels(m):
-    return(list(alphabet[:m]))
-
-def build_val_labels(m, n):
-    return(dict(zip(alphabet, [list(alphabet.upper()[:n]) for _ in range(m)])))
+        return([nest(l, depth-1, reps)] * reps)
 
 
-#initialisation
 def constant_array(constant, *args):
+    """create an array filled with the 'constant' of shape *args"""
     if len(args) == 0:
         return(constant)
     else:
         return(np.array([constant_array(constant, *args[1:])]*args[0]))
 
+
 def zeros(*args):
+    """create a constant array of shape *args"""
     return(constant_array(0.0, *args))
 
+
 def ones(*args):
+    """create a constant array of shape *args"""
     return(constant_array(1.0, *args))
 
-#helpers
+
 def unnest(l):
-    '''unnest a nested list l'''
+    """unnest a nested list l"""
     return([x for y in l for x in mlist(y)])
 
+
 def mlist(x):
-    '''make sure x is a list'''
+    """make sure x is a list"""
     if isinstance(x, list):
         return(x)
     else:
         return([x])
 
+
 def idict(list_):
+    """create an ordered dict of i -> 'list_'[i]"""
     return(OrderedDict(zip(range(len(list_)), list_)))
 
-#reverse k, v for idict
+
 def ridict(list_):
+    """create an ordered dict of 'list_'[i] -> i"""
     return(OrderedDict({v:k for k, v in idict(list_).items()}))
 
 
 def ilist(dict_):
     return(list(dict_.values()))
 
+
 def rilist(dict_):
     return(list(dict_.keys()))
 
+
+def sort_dict(dict_):
+    return([(k, v) for k, v in sorted(list(dict_.items()), key= lambda x: x[0])])
+
+
 class HyperFrame:
+    """
+    A numpy array with dimension labels and named indices of each dimension for
+    storage and access to high-dimensional data.
+
+    Attributes:
+        dim_labels (OrderedDict[int, string]): index -> dimension label
+        rdim_labels (OrderedDict[string, int]): dimension label -> index
+        val_labels (OrderedDict[string, OrderedDict[int, string]]): dimension label -> index -> index label
+        rval_labels (OrderedDict[string, OrderedDict[string, int]]): dimension label -> index label -> index
+        data (np.array): data
+    """
     def __init__(self, dimension_labels, index_labels, data=None):
+        """
+        The constructor of the HyperFrame class.
+
+        Parameters:
+            dimension_labels (list[string]): dimension labels
+            index_labels (dict[string, list[string]]): dimension_label -> index labels
+            data (np.array): data
+        """
 
         assert isinstance(dimension_labels, list)
 
@@ -73,11 +100,10 @@ class HyperFrame:
 
         index_labels = OrderedDict(index_labels)
 
-        #refactor to make this reversal unnessecary
         self.dim_labels = idict(dimension_labels)
-        self.val_labels = OrderedDict({k: idict(v) for k, v in index_labels.items()})
-        
         self.rdim_labels = ridict(dimension_labels)
+
+        self.val_labels = OrderedDict({k: idict(v) for k, v in index_labels.items()})        
         self.rval_labels = OrderedDict({k: ridict(v) for k, v in index_labels.items()})
         
 
@@ -90,17 +116,37 @@ class HyperFrame:
 
 
     def copy(self):
+        """
+        copy this HyperFrame
+
+        Returns:
+            HyperFrame: a new HyperFrame with the same data
+        """
         index_labels = OrderedDict({k: rilist(v) for k, v in self.rval_labels.items()})
         return(HyperFrame( ilist(self.dim_labels), index_labels , self.data.copy()))
+
+    def iget(self, *args, **kwargs):
+        return(self._iget(False, *args, **kwargs))
+
+    def icopy(self, *args, **kwargs):
+        return(self._iget(True, *args, **kwargs))
     
-    def iget(self, copy=False, **kwargs):
+    def _iget(self, copy=False, *args, **kwargs):
         """
-        get the HyperFrame with the 
+        subset the dataframe
         """
-        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()])
+        return_type = kwargs.get("return_type", "hyperframe")
+        _ = kwargs.pop("return_type", None)
+
+        assert len(args) == 0 or (len(args) == len(self.dim_labels) and len(kwargs)==0)
+
+        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()] +
+                             [(self.dim_labels[i], mlist(v))  if v in ilist(self.val_labels[self.dim_labels[i]])
+                                                              else (self.dim_labels[i], ilist(self.val_labels[self.dim_labels[i]]))
+                              for i, v in enumerate(args)])
+
 
         self.validate_kwargs(kwargs)
-
                         
         ndim_labels = [(i, v)
                        for i, v in self.dim_labels.items()
@@ -116,21 +162,40 @@ class HyperFrame:
         else:
             ndata = self.data
 
-        #indices = self.construct_indices_string(kwargs, ndata.shape)
-
-        #ndata = eval("ndata[{}]".format(indices))
 
         indices = self.construct_indices(kwargs, ndata.shape)
         ndata = ndata[np.ix_(*indices)]
         ndata = ndata.reshape(*[x for x in ndata.shape if x > 1]) 
 
-        hdata = HyperFrame(ndim_labels, nval_labels, ndata)
-        return(hdata)
+        subset = HyperFrame(ndim_labels, nval_labels, ndata)
+
+
+        if return_type == "pandas" and len(subset.data.shape) > 2:
+            warnings.warn("Returning HyperFrame as subset dimenionality is above 2")
+
+
+        if len(subset.data.shape) <= 2 and return_type == "pandas":
+            return(self._get_pandas_object(subset))
+        elif return_type == "hyperframe":
+            return(subset)
+        elif return_type == "numpy":
+            return(subset.data)
+        else:
+            warnings.warn("return_type must be in ['hyperframe', 'pandas', 'numpy']")
+
    
 
-    def sort_dict(self, dict_):
-        return([(k, v) for k, v in sorted(list(dict_.items()), key= lambda x: x[0])])
-    
+
+    @staticmethod
+    def _get_pandas_object(subset):
+        indices = [[v2 for k2, v2 in sort_dict(subset.val_labels[v])] 
+                   for k, v in sort_dict(subset.dim_labels)]
+
+        if len(indices) == 1:
+            return(pd.Series(subset.data, index=indices[0]))
+        else:
+            return(pd.DataFrame(subset.data, index=indices[0], columns = indices[1]))
+
     def iget0(self, *args, return_type=None):
         assert len(args) > 0 and len(args) < 3
 
@@ -142,17 +207,11 @@ class HyperFrame:
             return( subset)
         elif return_type == "numpy":
             return(subset.data)
-        elif return_type == "pandas":            
-            indices = [[v2 for k2, v2 in self.sort_dict(subset.val_labels[v])] 
-                       for k, v in self.sort_dict(subset.dim_labels)]
-            
-            assert len(indices) == len(args)
+        elif return_type == "pandas": 
+            return(self._get_pandas_object(subset))           
 
-            index = indices[0]
-            columns = indices[1]            
-            
-            return(pd.DataFrame(subset.data, columns = columns, index=index))
-    
+
+
     
     def iset(self, new_data, copy=False,  **kwargs):
         kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()])
@@ -171,27 +230,12 @@ class HyperFrame:
         else:
             hframe = self
 
-        #indices = self.construct_indices_string(kwargs, hframe.data.shape)
-        #exec("hframe.data[{}] = new_data".format(indices))
-
         indices = self.construct_indices(kwargs, hframe.data.shape)
         hframe.data[np.ix_(*indices)] = new_data.reshape([len(x) for x in indices])
-
-        #hframe = self._iset_ndata(hframe.data, new_data, indices)
             
         return(hframe)
     
-    def construct_indices_string(self, kwargs, shape):
-        numpy_indices = [":"]*len(shape)
-        for dim_label, target_labels in kwargs.items():
-            dim = self.rdim_labels[dim_label]
-            target_indices = {dim:[self.rval_labels[dim_label][target] for target in target_labels]}
 
-            for k, v in target_indices.items():
-                v2 = v if len(v) > 1 else v[0]
-                numpy_indices[k] = str(v2)
-                
-        return(",".join(numpy_indices))
 
     def construct_indices(self, kwargs, shape):
         numpy_indices = [list(range(x)) for x in shape]
@@ -291,12 +335,3 @@ class HyperFrame:
         subprocess.run(["rm", "-r", dir_ ])
 
         return(HyperFrame(ilist(labels["dim_labels"]), {k: ilist(v) for k, v in labels["val_labels"].items()}, data))
-
-
-
-
-
-
-
-
-    
