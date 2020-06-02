@@ -89,7 +89,7 @@ class HyperFrame:
 
         Parameters:
             dimension_labels (list[string]): dimension labels
-            index_labels (dict[string, list[string]]): dimension_label -> index labels
+            index_labels (dict[string, list[int | string]]): dimension_label -> index labels
             data (np.array): data
         """
 
@@ -110,7 +110,7 @@ class HyperFrame:
         if data is None:
             data = zeros(*[len(self.val_labels[dim_label]) for _, dim_label in self.dim_labels.items()])
         
-        HyperFrame.validate_data(data, self.dim_labels, self.val_labels)
+        HyperFrame._validate_data(data, self.dim_labels, self.val_labels)
 
         self.data = data
 
@@ -125,28 +125,27 @@ class HyperFrame:
         index_labels = OrderedDict({k: rilist(v) for k, v in self.rval_labels.items()})
         return(HyperFrame( ilist(self.dim_labels), index_labels , self.data.copy()))
 
+
+
+
+
     def iget(self, *args, **kwargs):
-        return(self._iget(False, *args, **kwargs))
-
-    def icopy(self, *args, **kwargs):
-        return(self._iget(True, *args, **kwargs))
-    
-    def _iget(self, copy=False, *args, **kwargs):
         """
-        subset the dataframe
+        Get a subset of the dataframe by EITHER args or kwargs
+
+        Parameters:
+            *args (list[string]): values on each dimension by which the data should be subset, dimensions that should not be subset should have a value not in the dimension index
+            **kwargs (dict[string, int | string | list[int] | list[string]]): dimension labels -> value or values to subset by
+            return_type (string) (in kwargs): in ["hyperframe", "pandas", "numpy"]
+
+        Returns:
+            HyperFrame | pd.DataFrame | pd.Series | np.array: subset of original data
+
         """
-        return_type = kwargs.get("return_type", "hyperframe")
-        _ = kwargs.pop("return_type", None)
 
-        assert len(args) == 0 or (len(args) == len(self.dim_labels) and len(kwargs)==0)
+        return_type = kwargs.pop("return_type", "hyperframe")
 
-        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()] +
-                             [(self.dim_labels[i], mlist(v))  if v in ilist(self.val_labels[self.dim_labels[i]])
-                                                              else (self.dim_labels[i], ilist(self.val_labels[self.dim_labels[i]]))
-                              for i, v in enumerate(args)])
-
-
-        self.validate_kwargs(kwargs)
+        kwargs = self._build_kwargs(args, kwargs)
                         
         ndim_labels = [(i, v)
                        for i, v in self.dim_labels.items()
@@ -157,87 +156,146 @@ class HyperFrame:
         nval_labels = {k: kwargs.get(k, v) for k, v in self.val_labels.items() if len(kwargs.get(k, v)) > 1}
         nval_labels = {k: (mlist(v) if not isinstance(v, dict) else list(v.values())) for k, v in nval_labels.items()}
 
-        if copy:
-            ndata = self.data.copy()
-        else:
-            ndata = self.data
 
-
-        indices = self.construct_indices(kwargs, ndata.shape)
-        ndata = ndata[np.ix_(*indices)]
+        indices = self._construct_indices(kwargs, self.data.shape)
+        ndata = self.data[np.ix_(*indices)]
         ndata = ndata.reshape(*[x for x in ndata.shape if x > 1]) 
 
         subset = HyperFrame(ndim_labels, nval_labels, ndata)
 
-
-        if return_type == "pandas" and len(subset.data.shape) > 2:
-            warnings.warn("Returning HyperFrame as subset dimenionality is above 2")
-
-
-        if len(subset.data.shape) <= 2 and return_type == "pandas":
-            return(self._get_pandas_object(subset))
-        elif return_type == "hyperframe":
-            return(subset)
-        elif return_type == "numpy":
-            return(subset.data)
-        else:
-            warnings.warn("return_type must be in ['hyperframe', 'pandas', 'numpy']")
-
-   
+        return(HyperFrame._cast_return_value(subset, return_type))
 
 
     @staticmethod
-    def _get_pandas_object(subset):
-        indices = [[v2 for k2, v2 in sort_dict(subset.val_labels[v])] 
-                   for k, v in sort_dict(subset.dim_labels)]
+    def _cast_return_value(hyperframe, return_type):
+        """'cast' a hyperframe to a pandas or numpy object, or return unaltered"""
+        if return_type == "pandas":
+            return(HyperFrame._get_pandas_object(hyperframe))
+        elif return_type == "numpy":
+            return(hyperframe.data)
+        elif return_type == "hyperframe":
+            return(hyperframe)
+        else:
+            warnings.warn("return_type must be in ['hyperframe', 'pandas', 'numpy']")
+
+
+    @staticmethod
+    def _get_pandas_object(hyperframe):
+        """
+        Turn a HyperFrame of dimensionality <= into a pandas object
+
+        Paramters:
+            hyperframe (HyperFrame)
+
+        Returns:
+            pd.DataFrame | pd.Series
+        """
+        indices = [[v2 for k2, v2 in sort_dict(hyperframe.val_labels[v])] 
+                   for k, v in sort_dict(hyperframe.dim_labels)]
+
+        assert len(indices) <= 2, "pandas objects cannot have {} dimensions".format(len(indices))
 
         if len(indices) == 1:
-            return(pd.Series(subset.data, index=indices[0]))
+            return(pd.Series(hyperframe.data, index=indices[0]))
         else:
-            return(pd.DataFrame(subset.data, index=indices[0], columns = indices[1]))
+            return(pd.DataFrame(hyperframe.data, index=indices[0], columns = indices[1]))
+
 
     def iget0(self, *args, return_type=None):
-        assert len(args) > 0 and len(args) < 3
+        """
+        Return data for the dimensions in *args by subsetting the other dimensions to the first index label
+
+        Parameters:
+            *args (list[string]): the dimensions to be preserved in full
+            return_type (string) (in kwargs): in ["hyperframe", "pandas", "numpy"]
+
+        Returns:
+            HyperFrame | pd.DataFrame | pd.Series | np.array: subset of original data
+        """
+        assert len(args) > 0 and len(args) <= 2
+        assert np.all([a in self.dim_labels.values for a  in args])
 
         kwargs = {v: self.val_labels[v][0] for i, v in self.dim_labels.items() if v not in args}
         print(kwargs)
         subset = self.iget(**kwargs)
-        
-        if return_type is None:
-            return( subset)
-        elif return_type == "numpy":
-            return(subset.data)
-        elif return_type == "pandas": 
-            return(self._get_pandas_object(subset))           
+
+        return(HyperFrame._cast_return_value(subset, return_type))
 
 
+    def iset(self, new_data, *args, **kwargs):
+        """
+        Replace a subset of the data with 'new_data'
 
-    
-    def iset(self, new_data, copy=False,  **kwargs):
-        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()])
+        Parameters:
+            new_data (np.array): new data
+            *args (list[string]): values on each dimension by which the data should be subset, dimensions that should not be subset should have a value not in the dimension index
+            **kwargs (dict[string, int | string | list[int] | list[string]]): dimension labels -> value or values to subset by
 
-        self.validate_kwargs(kwargs)
+        Returns:
+            HyperFrame
+        """
+        kwargs = self._build_kwargs(args, kwargs)
 
         test1 = np.issubdtype(type(new_data), np.number)
         test2 = np.issubdtype(type(self.iget(**kwargs).data), np.number)
-
-        test3 = type(new_data) == type(np.array([0]))
-
+        test3 = isinstance(new_data, type(np.array([0])))
         assert test3 or (test1 and test2)
         
-        if copy:
-            hframe = self.copy()
-        else:
-            hframe = self
-
-        indices = self.construct_indices(kwargs, hframe.data.shape)
-        hframe.data[np.ix_(*indices)] = new_data.reshape([len(x) for x in indices])
+        indices = self._construct_indices(kwargs, self.data.shape)
+        self.data[np.ix_(*indices)] = new_data.reshape([len(x) for x in indices])
             
-        return(hframe)
-    
+        return(self)
+
+    def _validate_other(self, other):
+        assert  np.all([label == other.dim_labels[i] for i, label in self.dim_labels.items()]), "the dimension labels of self and other must be identical" 
+        dims_identical = np.array([np.all(np.array(self.rval_labels[label].keys()) ==  np.array(other.rval_labels[label].keys())) for label in self.rdim_labels.keys()])
+
+        return(dims_identical)
+
+    def expand(self, other):
+
+        dims_identical = self._validate_other(other)
+        dim_different = np.argmin(dims_identical)
+        dim_label_different = self.dim_labels[dim_different]
+
+        assert np.sum(dims_identical) + 1 == len(self.dim_labels), "all but one dimension need to have identical val_labels"
+
+        assert len(set(self.rval_labels[dim_label_different].keys()).intersection(set(other.rval_labels[dim_label_different].keys()))) == 0, \
+                "the dimension with different val_labels cannot have overlapping val_labels"
 
 
-    def construct_indices(self, kwargs, shape):
+        merged_val_labels = OrderedDict(self.val_labels)
+
+        l = len(merged_val_labels[dim_label_different])
+        for i, other_val_label in other.val_labels[dim_label_different].items():
+            assert l+i not in merged_val_labels[dim_label_different].keys()
+            merged_val_labels[dim_label_different][l+i] = other_val_label
+
+        return(HyperFrame(ilist(self.dim_labels),  {k: ilist(v) for k, v in merged_val_labels.items()}, np.concatenate([self.data, other.data], axis=dim_different)))
+
+
+    def merge(self, other, new_dimension, new_dimension_index_labels):
+
+        other = mlist(other)
+
+        assert new_dimension not in ilist(self.dim_labels)
+
+        for other_ in other:
+            dims_identical = self._validate_other(other_)
+            assert np.all(dims_identical)
+
+        new_dimension_labels = ilist(self.dim_labels) + [new_dimension]
+
+        new_index_labels = {k: ilist(v) for k, v in list(self.val_labels.items())}
+        new_index_labels[new_dimension] = new_dimension_index_labels
+
+        reshaped_data = [np.expand_dims(hf.data, -1) for hf in [self] + other]
+        new_data = np.concatenate(reshaped_data, axis= len(self.data.shape))
+
+        return(HyperFrame(new_dimension_labels, new_index_labels, new_data))
+
+
+    def _construct_indices(self, kwargs, shape):
         numpy_indices = [list(range(x)) for x in shape]
         for dim_label, target_labels in kwargs.items():
             dim = self.rdim_labels[dim_label]
@@ -249,8 +307,26 @@ class HyperFrame:
 
         return(numpy_indices)
 
+
+    def _build_kwargs(self, args, kwargs):
+
+        assert len(args) == 0 or (len(args) == len(self.dim_labels) and len(kwargs)==0)
+
+        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()] +
+                             [(self.dim_labels[i], mlist(v))  if v in ilist(self.val_labels[self.dim_labels[i]])
+                                                              else (self.dim_labels[i], ilist(self.val_labels[self.dim_labels[i]]))
+                              for i, v in enumerate(args)])
+
+        for i, arg in enumerate(args):
+            if arg not in ilist(self.val_labels[self.dim_labels[i]]) and arg != "":
+                raise ValueError("{} is not a valid index_label for {}".format(arg, self.dim_labels[i]))
+
+
+        self._validate_kwargs(kwargs)
+
+        return(kwargs)   
     
-    def validate_kwargs(self, kwargs):
+    def _validate_kwargs(self, kwargs):
         for key, value in kwargs.items():
             try:
                 assert key in self.dim_labels.values()
@@ -264,31 +340,31 @@ class HyperFrame:
         
     
     @staticmethod
-    def validate_data(data, dim_labels, val_labels):
+    def _validate_data(data, dim_labels, val_labels):
 
         assert isinstance(data, type(np.array([0]))) or np.issubdtype(type(data), np.number)
         
         assert len(dim_labels) == len(val_labels)
         
-        HyperFrame.validate_dict(dim_labels, len(data.shape))
+        HyperFrame._validate_dict(dim_labels, len(data.shape))
         
         for dim, dim_label in dim_labels.items():
             assert dim_label in val_labels.keys()
             
-            HyperFrame.validate_dict(val_labels[dim_label], data.shape[dim])
+            HyperFrame._validate_dict(val_labels[dim_label], data.shape[dim])
     
     @staticmethod
-    def validate_dict(dict_, dims):
+    def _validate_dict(dict_, dims):
         assert len(dict_) == dims
-        assert HyperFrame.dense_keys(dict_)
+        assert HyperFrame._dense_keys(dict_)
         
     @staticmethod
-    def dense_keys(dict_):
+    def _dense_keys(dict_):
         dict_keys = dict_.keys()
         return np.all([x in dict_keys for x in range(len(dict_))])
 
     @staticmethod
-    def strip_path(path):
+    def _strip_path(path):
         filename = path.split("/")[-1]
         if "." in filename and filename.split(".")[:-1] in ["csv", "txt", "hyperframe"]:
             path = ".".join(path.split(".")[:-1]) 
@@ -296,9 +372,10 @@ class HyperFrame:
             warnings.warn("path changed to: {}".format(path))
         return(path)
 
-    def write_file(self, path):
+    def old_write_file(self, path):
 
-        path = self.strip_path(path)
+        #REWRITE
+        path = self._strip_path(path)
 
         dir_ = path+"/"
         os.mkdir(dir_)
@@ -317,9 +394,9 @@ class HyperFrame:
         subprocess.run(["mv", path + ".zip", path + ".hyperframe" ])
 
     @staticmethod
-    def read_file(path):
-
-        path = HyperFrame.strip_path(path)
+    def old_read_file(path):
+        #REWRITE
+        path = HyperFrame._strip_path(path)
 
         dir_ = path+"/"
 
