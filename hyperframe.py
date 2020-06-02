@@ -4,7 +4,6 @@ from collections import OrderedDict
 import os
 import json
 import shutil
-import subprocess
 import warnings
 
 
@@ -82,6 +81,9 @@ class HyperFrame:
         val_labels (OrderedDict[string, OrderedDict[int, string]]): dimension label -> index -> index label
         rval_labels (OrderedDict[string, OrderedDict[string, int]]): dimension label -> index label -> index
         data (np.array): data
+
+    Methods:
+
     """
     def __init__(self, dimension_labels, index_labels, data=None):
         """
@@ -100,9 +102,12 @@ class HyperFrame:
 
         index_labels = OrderedDict(index_labels)
 
+
+        self.dimension_labels = dimension_labels
         self.dim_labels = idict(dimension_labels)
         self.rdim_labels = ridict(dimension_labels)
 
+        self.index_labels = index_labels
         self.val_labels = OrderedDict({k: idict(v) for k, v in index_labels.items()})        
         self.rval_labels = OrderedDict({k: ridict(v) for k, v in index_labels.items()})
         
@@ -122,8 +127,7 @@ class HyperFrame:
         Returns:
             HyperFrame: a new HyperFrame with the same data
         """
-        index_labels = OrderedDict({k: rilist(v) for k, v in self.rval_labels.items()})
-        return(HyperFrame( ilist(self.dim_labels), index_labels , self.data.copy()))
+        return(HyperFrame( self.dimension_labels, OrderedDict(self.index_labels) , self.data.copy()))
 
 
 
@@ -134,13 +138,14 @@ class HyperFrame:
         Get a subset of the dataframe by EITHER args or kwargs
 
         Parameters:
-            *args (list[string]): values on each dimension by which the data should be subset, dimensions that should not be subset should have a value not in the dimension index
-            **kwargs (dict[string, int | string | list[int] | list[string]]): dimension labels -> value or values to subset by
+            *args (list[string]): values on each dimension by which the data should be subset, dimensions that should
+                                  not be subset should have a value not in the dimension index
+            **kwargs (dict[string, int | string | list[int] | list[string]]): dimension labels -> value or values 
+                                                                              to subset by
             return_type (string) (in kwargs): in ["hyperframe", "pandas", "numpy"]
 
         Returns:
             HyperFrame | pd.DataFrame | pd.Series | np.array: subset of original data
-
         """
 
         return_type = kwargs.pop("return_type", "hyperframe")
@@ -228,11 +233,13 @@ class HyperFrame:
 
         Parameters:
             new_data (np.array): new data
-            *args (list[string]): values on each dimension by which the data should be subset, dimensions that should not be subset should have a value not in the dimension index
-            **kwargs (dict[string, int | string | list[int] | list[string]]): dimension labels -> value or values to subset by
+            *args (list[string]): values on each dimension by which the data should be subset, dimensions that should
+                                  not be subset should have a value not in the dimension index
+            **kwargs (dict[string, int | string | list[int] | list[string]]): dimension labels -> value or values
+                                                                              to subset by
 
         Returns:
-            HyperFrame
+            HyperFrame: HyperFrame with changed data
         """
         kwargs = self._build_kwargs(args, kwargs)
 
@@ -247,20 +254,44 @@ class HyperFrame:
         return(self)
 
     def _validate_other(self, other):
-        assert  np.all([label == other.dim_labels[i] for i, label in self.dim_labels.items()]), "the dimension labels of self and other must be identical" 
-        dims_identical = np.array([np.all(np.array(self.rval_labels[label].keys()) ==  np.array(other.rval_labels[label].keys())) for label in self.rdim_labels.keys()])
+
+        assert  np.all([label == other.dim_labels[i] for i, label in self.dim_labels.items()]), \
+                "the dimension labels of self and other must be identical" 
+
+        dims_identical = [np.all(np.array(self.rval_labels[label].keys()) == 
+                                          np.array(other.rval_labels[label].keys()))
+                         for label in self.rdim_labels.keys()]
+
+        dims_identical = np.array(dims_identical)
 
         return(dims_identical)
 
+
     def expand(self, other):
+        """
+        Expand this HyperFrame along one dimension with another HyperFrame
+
+        Parameters:
+            other (HyperFrame): Another HyperFrame with identical 'dimension_labels' and identical 'index_labels'
+                                except for on one dimension: On that dimension, the 'index_labels' of other do
+                                not overlap with those of self
+
+        Returns:
+            HyperFrame: A new HyperFrame with additional index labels and data on one dimension
+
+        """
 
         dims_identical = self._validate_other(other)
         dim_different = np.argmin(dims_identical)
         dim_label_different = self.dim_labels[dim_different]
 
-        assert np.sum(dims_identical) + 1 == len(self.dim_labels), "all but one dimension need to have identical val_labels"
+        assert  np.sum(dims_identical) + 1 == len(self.dim_labels), \
+                "all but one dimension need to have identical val_labels"
 
-        assert len(set(self.rval_labels[dim_label_different].keys()).intersection(set(other.rval_labels[dim_label_different].keys()))) == 0, \
+        self_dim_labels = set(self.rval_labels[dim_label_different].keys())
+        other_dim_labels = set(other.rval_labels[dim_label_different].keys())
+
+        assert len(self_dim_labels.intersection(other_dim_labels)) == 0,
                 "the dimension with different val_labels cannot have overlapping val_labels"
 
 
@@ -271,22 +302,36 @@ class HyperFrame:
             assert l+i not in merged_val_labels[dim_label_different].keys()
             merged_val_labels[dim_label_different][l+i] = other_val_label
 
-        return(HyperFrame(ilist(self.dim_labels),  {k: ilist(v) for k, v in merged_val_labels.items()}, np.concatenate([self.data, other.data], axis=dim_different)))
+        new_data = np.concatenate([self.data, other.data], axis=dim_different)
+
+        return(HyperFrame(self.dimension_labels, self.index_labels, new_data))
 
 
     def merge(self, other, new_dimension, new_dimension_index_labels):
+        """
+        Merge self and other to create a new HyperFrame with one additional dimension
+
+        Paramters:
+            other (HyperFrame | list[HyperFrame]): other HyperFrame(s) with the same dimension_labels and
+                                                   index_labels as self
+            new_dimension (string): name of the new dimension
+            new_dimension_index_labels (list[string]): labels on the new dimension
+
+        Returns:
+            HyperFrame
+        """
 
         other = mlist(other)
 
-        assert new_dimension not in ilist(self.dim_labels)
+        assert new_dimension not in self.dimension_labels
 
         for other_ in other:
             dims_identical = self._validate_other(other_)
             assert np.all(dims_identical)
 
-        new_dimension_labels = ilist(self.dim_labels) + [new_dimension]
+        new_dimension_labels = self.dimension_labels + [new_dimension]
 
-        new_index_labels = {k: ilist(v) for k, v in list(self.val_labels.items())}
+        new_index_labels = OrderedDict(self.index_labels)
         new_index_labels[new_dimension] = new_dimension_index_labels
 
         reshaped_data = [np.expand_dims(hf.data, -1) for hf in [self] + other]
@@ -296,7 +341,9 @@ class HyperFrame:
 
 
     def _construct_indices(self, kwargs, shape):
+
         numpy_indices = [list(range(x)) for x in shape]
+
         for dim_label, target_labels in kwargs.items():
             dim = self.rdim_labels[dim_label]
             target_indices = {dim:[self.rval_labels[dim_label][target] for target in target_labels]}
@@ -312,13 +359,17 @@ class HyperFrame:
 
         assert len(args) == 0 or (len(args) == len(self.dim_labels) and len(kwargs)==0)
 
-        kwargs = OrderedDict([(k, mlist(v)) for k, v in kwargs.items()] +
-                             [(self.dim_labels[i], mlist(v))  if v in ilist(self.val_labels[self.dim_labels[i]])
-                                                              else (self.dim_labels[i], ilist(self.val_labels[self.dim_labels[i]]))
-                              for i, v in enumerate(args)])
+        kwargs = [(k, mlist(v)) for k, v in kwargs.items()]
+
+        args_to_kwargs = [(self.dim_labels[i], mlist(v) if v in self.index_labels[self.dim_labels[i]]
+                                                        else self.index_labels[self.dim_labels[i]])
+                         for i, v in enumerate(args)]
+
+
+        kwargs = OrderedDict(kwargs + args_to_kwargs)
 
         for i, arg in enumerate(args):
-            if arg not in ilist(self.val_labels[self.dim_labels[i]]) and arg != "":
+            if arg not in self.index_labels[self.dim_labels[i]] and arg != "":
                 raise ValueError("{} is not a valid index_label for {}".format(arg, self.dim_labels[i]))
 
 
@@ -326,7 +377,9 @@ class HyperFrame:
 
         return(kwargs)   
     
+
     def _validate_kwargs(self, kwargs):
+
         for key, value in kwargs.items():
             try:
                 assert key in self.dim_labels.values()
@@ -335,7 +388,11 @@ class HyperFrame:
                 for v in value:
                     assert(v in self.val_labels[key].values())
             except:
-                print("{}\n{}\n\n{}\n{}\n".format(key, self.dim_labels.values(), value, self.val_labels[key].values()))
+                print("{}\n{}\n\n{}\n{}\n".format(key,
+                                                  self.dim_labels.values(),
+                                                  value,
+                                                  self.val_labels[key].values()))
+
                 raise Exception("illegal argument provided")
         
     
@@ -355,16 +412,19 @@ class HyperFrame:
     
     @staticmethod
     def _validate_dict(dict_, dims):
+
         assert len(dict_) == dims
         assert HyperFrame._dense_keys(dict_)
         
     @staticmethod
     def _dense_keys(dict_):
+
         dict_keys = dict_.keys()
         return np.all([x in dict_keys for x in range(len(dict_))])
 
     @staticmethod
     def _strip_path(path):
+
         filename = path.split("/")[-1]
         if "." in filename and filename.split(".")[:-1] in ["csv", "txt", "hyperframe"]:
             path = ".".join(path.split(".")[:-1]) 
@@ -372,12 +432,12 @@ class HyperFrame:
             warnings.warn("path changed to: {}".format(path))
         return(path)
 
-    def old_write_file(self, path):
 
-        #REWRITE
+    def write_file(self, path):
+
         path = self._strip_path(path)
 
-        dir_ = path+"/"
+        dir_ = os.path.join(path, "")
         os.mkdir(dir_)
 
         with open(os.path.join(dir_, "labels.json"), "w") as f:
@@ -388,14 +448,31 @@ class HyperFrame:
 
         np.save(os.path.join(dir_, "data"), self.data)
 
-        
-        subprocess.run(["zip", "-r", path + ".zip", "-j", dir_])
-        subprocess.run(["rm", "-r", dir_])
-        subprocess.run(["mv", path + ".zip", path + ".hyperframe" ])
+        shutil.make_archive(path, 'zip', dir_)
+        shutil.rmtree(dir_)
+
+    @staticmethod
+    def read_file(path):
+
+        path = HyperFrame._strip_path(path)
+
+        dir_ = os.path.join(path, "")
+
+        shutil.unpack_archive(path+".zip", dir_)
+
+        data = np.load(os.path.join(dir_, "data.npy"))
+
+        with open(os.path.join(dir_, "labels.json"), "r") as f:
+            labels = json.loads(f.read())
+
+        shutil.rmtree(dir_)
+
+        return(HyperFrame(ilist(labels["dim_labels"]), {k: ilist(v) for k, v in labels["val_labels"].items()}, data))
+
 
     @staticmethod
     def old_read_file(path):
-        #REWRITE
+
         path = HyperFrame._strip_path(path)
 
         dir_ = path+"/"
