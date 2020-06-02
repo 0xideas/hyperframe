@@ -76,14 +76,13 @@ class HyperFrame:
     storage and access to high-dimensional data.
 
     Attributes:
+        dimension_labels (list[string]): dimension labels
+        index_labels (OrderedDict[string, list[string]]): dimension label -> index labels
         dim_labels (OrderedDict[int, string]): index -> dimension label
         rdim_labels (OrderedDict[string, int]): dimension label -> index
         val_labels (OrderedDict[string, OrderedDict[int, string]]): dimension label -> index -> index label
         rval_labels (OrderedDict[string, OrderedDict[string, int]]): dimension label -> index label -> index
         data (np.array): data
-
-    Methods:
-
     """
     def __init__(self, dimension_labels, index_labels, data=None):
         """
@@ -128,9 +127,6 @@ class HyperFrame:
             HyperFrame: a new HyperFrame with the same data
         """
         return(HyperFrame( self.dimension_labels, OrderedDict(self.index_labels) , self.data.copy()))
-
-
-
 
 
     def iget(self, *args, **kwargs):
@@ -291,7 +287,7 @@ class HyperFrame:
         self_dim_labels = set(self.rval_labels[dim_label_different].keys())
         other_dim_labels = set(other.rval_labels[dim_label_different].keys())
 
-        assert len(self_dim_labels.intersection(other_dim_labels)) == 0,
+        assert len(self_dim_labels.intersection(other_dim_labels)) == 0, \
                 "the dimension with different val_labels cannot have overlapping val_labels"
 
 
@@ -434,38 +430,51 @@ class HyperFrame:
 
 
     def write_file(self, path):
+        """write file to path"""
 
         path = self._strip_path(path)
 
-        dir_ = os.path.join(path, "")
+        dir_ = os.path.join(path + str(np.random.uniform())[2:], "")
+
+        assert not os.path.exists(dir_)
+        assert not os.path.exists(path + ".zip")
+
         os.mkdir(dir_)
 
-        with open(os.path.join(dir_, "labels.json"), "w") as f:
-            f.write(json.dumps({"dim_labels": self.dim_labels,
-                                "rdim_labels": self.rdim_labels,
-                                "val_labels": self.val_labels,
-                                "rval_labels": self.rval_labels}))
+        try:
+            with open(os.path.join(dir_, "labels.json"), "w") as f:
+                f.write(json.dumps({"dim_labels": self.dim_labels,
+                                    "rdim_labels": self.rdim_labels,
+                                    "val_labels": self.val_labels,
+                                    "rval_labels": self.rval_labels}))
 
-        np.save(os.path.join(dir_, "data"), self.data)
+            np.save(os.path.join(dir_, "data"), self.data)
 
-        shutil.make_archive(path, 'zip', dir_)
-        shutil.rmtree(dir_)
+            shutil.make_archive(path, 'zip', dir_)
+        except Exception as e:
+            raise e
+        finally:
+            shutil.rmtree(dir_)
 
     @staticmethod
     def read_file(path):
+        """read file from path"""
 
         path = HyperFrame._strip_path(path)
 
-        dir_ = os.path.join(path, "")
+        dir_ = os.path.join(path + str(np.random.uniform())[2:], "")
 
         shutil.unpack_archive(path+".zip", dir_)
 
-        data = np.load(os.path.join(dir_, "data.npy"))
+        try:
+            data = np.load(os.path.join(dir_, "data.npy"))
 
-        with open(os.path.join(dir_, "labels.json"), "r") as f:
-            labels = json.loads(f.read())
-
-        shutil.rmtree(dir_)
+            with open(os.path.join(dir_, "labels.json"), "r") as f:
+                labels = json.loads(f.read())
+        except Exception as e:
+            raise e
+        finally:
+            shutil.rmtree(dir_)
 
         return(HyperFrame(ilist(labels["dim_labels"]), {k: ilist(v) for k, v in labels["val_labels"].items()}, data))
 
