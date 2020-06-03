@@ -1,3 +1,12 @@
+# HyperFrame
+
+The aim of this project is to provide a high-dimensional analogue to the two-dimensional pandas DataFrame.
+
+This allows its user to organise information where the interaction of several factors is of interest.
+
+The HyperFrame allows for the easy setting and saving of data for storage, and the fast, interactive creation of two-dimensional pandas DataFrames of any combination of two factors for data exploration.
+
+
 ```python
 import numpy as np
 import pandas as pd
@@ -6,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from hyperframe import HyperFrame
 from sklearn.model_selection import train_test_split
-from demo.helpers import metrics, X, y
+from demo.helpers import metrics, X, y, *
 ```
 
 
