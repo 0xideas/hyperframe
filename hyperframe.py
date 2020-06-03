@@ -5,6 +5,7 @@ import os
 import json
 import shutil
 import warnings
+import subprocess
 
 
 def nest(l, depth=1, reps=1):
@@ -83,6 +84,7 @@ class HyperFrame:
         val_labels (OrderedDict[string, OrderedDict[int, string]]): dimension label -> index -> index label
         rval_labels (OrderedDict[string, OrderedDict[string, int]]): dimension label -> index label -> index
         data (np.array): data
+        shape (set): shape of the data
     """
     def __init__(self, dimension_labels, index_labels, data=None):
         """
@@ -117,6 +119,8 @@ class HyperFrame:
         HyperFrame._validate_data(data, self.dim_labels, self.val_labels)
 
         self.data = data
+
+        self.shape = data.shape
 
 
     def copy(self):
@@ -214,7 +218,7 @@ class HyperFrame:
             HyperFrame | pd.DataFrame | pd.Series | np.array: subset of original data
         """
         assert len(args) > 0 and len(args) <= 2
-        assert np.all([a in self.dim_labels.values for a  in args])
+        assert np.all([a in self.dimension_labels for a  in args])
 
         kwargs = {v: self.val_labels[v][0] for i, v in self.dim_labels.items() if v not in args}
         print(kwargs)
@@ -249,58 +253,56 @@ class HyperFrame:
             
         return(self)
 
-    def _validate_other(self, other):
+    def _validate_other(self, other, expand):
 
-        assert  np.all([label == other.dim_labels[i] for i, label in self.dim_labels.items()]), \
-                "the dimension labels of self and other must be identical" 
+        self_dimension_labels_subset = [label for label in self.dimension_labels if label in other.dimension_labels]
+
+        assert len(self_dimension_labels_subset) + int(expand) == len(self.dimension_labels)
+
+        for i, label in enumerate(self_dimension_labels_subset):
+            assert label == other.dim_labels[i], "the dimension labels of self and other must be identical" 
 
         dims_identical = [np.all(np.array(self.rval_labels[label].keys()) == 
                                           np.array(other.rval_labels[label].keys()))
-                         for label in self.rdim_labels.keys()]
+                         for label in self_dimension_labels_subset]
 
-        dims_identical = np.array(dims_identical)
-
-        return(dims_identical)
+        assert np.all(dims_identical)
 
 
-    def expand(self, other):
+    def expand(self, other, on_dimension, new_index_label):
         """
         Expand this HyperFrame along one dimension with another HyperFrame
 
         Parameters:
-            other (HyperFrame): Another HyperFrame with identical 'dimension_labels' and identical 'index_labels'
+            other (HyperFrame): another HyperFrame with identical 'dimension_labels' and identical 'index_labels'
                                 except for on one dimension: On that dimension, the 'index_labels' of other do
                                 not overlap with those of self
+            on_dimension (string): dimension label on which other is "tacked on"
+            new_index_label (string): index label for other within the new HyperFrame
 
         Returns:
             HyperFrame: A new HyperFrame with additional index labels and data on one dimension
 
         """
 
-        dims_identical = self._validate_other(other)
-        dim_different = np.argmin(dims_identical)
-        dim_label_different = self.dim_labels[dim_different]
+        self._validate_other(other, True)
 
-        assert  np.sum(dims_identical) + 1 == len(self.dim_labels), \
-                "all but one dimension need to have identical val_labels"
+        dim_to_expand_on =  [(i, label) for i, label in self.dim_labels.items() if label not in other.dimension_labels]
 
-        self_dim_labels = set(self.rval_labels[dim_label_different].keys())
-        other_dim_labels = set(other.rval_labels[dim_label_different].keys())
+        assert len(dim_to_expand_on) == 1
 
-        assert len(self_dim_labels.intersection(other_dim_labels)) == 0, \
+        dim_different, dim_label_different = dim_to_expand_on[0]
+
+
+        assert new_index_label not in self.index_labels[dim_label_different], \
                 "the dimension with different val_labels cannot have overlapping val_labels"
 
+        new_index_labels = OrderedDict(self.index_labels)
+        new_index_labels[dim_label_different] += [new_index_label]
 
-        merged_val_labels = OrderedDict(self.val_labels)
+        new_data = np.concatenate([self.data, np.expand_dims(other.data, dim_different)], axis=dim_different)
 
-        l = len(merged_val_labels[dim_label_different])
-        for i, other_val_label in other.val_labels[dim_label_different].items():
-            assert l+i not in merged_val_labels[dim_label_different].keys()
-            merged_val_labels[dim_label_different][l+i] = other_val_label
-
-        new_data = np.concatenate([self.data, other.data], axis=dim_different)
-
-        return(HyperFrame(self.dimension_labels, self.index_labels, new_data))
+        return(HyperFrame(self.dimension_labels, new_index_labels, new_data))
 
 
     def merge(self, other, new_dimension, new_dimension_index_labels):
@@ -322,8 +324,7 @@ class HyperFrame:
         assert new_dimension not in self.dimension_labels
 
         for other_ in other:
-            dims_identical = self._validate_other(other_)
-            assert np.all(dims_identical)
+            self._validate_other(other_, False)
 
         new_dimension_labels = self.dimension_labels + [new_dimension]
 
