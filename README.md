@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from hyperframe import HyperFrame
 from sklearn.model_selection import train_test_split
-from demo.helpers import metrics, X, y, *
+from demo.helpers import metrics, X, y
 ```
 
 
@@ -64,7 +64,7 @@ scores.iset(metrics(y_train, yhat), "train", "", "")
 
 
 
-    <hyperframe.HyperFrame at 0x7f400b457e10>
+    <hyperframe.HyperFrame at 0x7f38c19d9eb8>
 
 
 
@@ -78,7 +78,7 @@ scores.iset(metrics(y_test, yhat), train_test="test")
 
 
 
-    <hyperframe.HyperFrame at 0x7f400b457e10>
+    <hyperframe.HyperFrame at 0x7f38c19d9eb8>
 
 
 
@@ -87,7 +87,7 @@ scores.iset(metrics(y_test, yhat), train_test="test")
 
 ```python
 #iget alternative 1
-scores.iget("train", "", "", return_type="pandas")
+scores.iget("train", "", "", return_type="pandas").round(2)
 ```
 
 
@@ -119,21 +119,21 @@ scores.iget("train", "", "", return_type="pandas")
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>0.906250</td>
-      <td>0.935484</td>
-      <td>0.920635</td>
+      <td>0.97</td>
+      <td>0.90</td>
+      <td>0.93</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.725000</td>
-      <td>0.828571</td>
-      <td>0.773333</td>
+      <td>0.74</td>
+      <td>0.91</td>
+      <td>0.82</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.857143</td>
-      <td>0.705882</td>
-      <td>0.774194</td>
+      <td>0.93</td>
+      <td>0.76</td>
+      <td>0.84</td>
     </tr>
   </tbody>
 </table>
@@ -144,7 +144,7 @@ scores.iget("train", "", "", return_type="pandas")
 
 ```python
 #iget alternative 2
-scores.iget(species="versicolor", return_type="pandas")
+scores.iget(species="versicolor", return_type="pandas").round(2)
 ```
 
 
@@ -176,15 +176,15 @@ scores.iget(species="versicolor", return_type="pandas")
   <tbody>
     <tr>
       <th>train</th>
-      <td>0.725000</td>
-      <td>0.828571</td>
-      <td>0.773333</td>
+      <td>0.74</td>
+      <td>0.91</td>
+      <td>0.82</td>
     </tr>
     <tr>
       <th>test</th>
-      <td>0.578947</td>
-      <td>0.733333</td>
-      <td>0.647059</td>
+      <td>0.56</td>
+      <td>0.67</td>
+      <td>0.61</td>
     </tr>
   </tbody>
 </table>
@@ -195,7 +195,7 @@ scores.iget(species="versicolor", return_type="pandas")
 
 ```python
 #iget alternative 3
-scores.iget0("species", "train_test", return_type="pandas")
+scores.iget0("species", "train_test", return_type="pandas").round(2)
 ```
 
     {'metric': 'precision'}
@@ -230,15 +230,15 @@ scores.iget0("species", "train_test", return_type="pandas")
   <tbody>
     <tr>
       <th>train</th>
-      <td>0.906250</td>
-      <td>0.725000</td>
-      <td>0.857143</td>
+      <td>0.97</td>
+      <td>0.74</td>
+      <td>0.93</td>
     </tr>
     <tr>
       <th>test</th>
-      <td>0.944444</td>
-      <td>0.578947</td>
-      <td>0.769231</td>
+      <td>0.94</td>
+      <td>0.56</td>
+      <td>0.73</td>
     </tr>
   </tbody>
 </table>
@@ -264,7 +264,7 @@ scores_lr.iset(metrics(y_test, yhat), "test", "", "")
 
 
 
-    <hyperframe.HyperFrame at 0x7f400b3e6128>
+    <hyperframe.HyperFrame at 0x7f38c18f01d0>
 
 
 
@@ -287,7 +287,7 @@ scores_models = scores.merge(scores_lr, "model", ["knn", "logistic regression"])
 
 
 ```python
-scores_models.iget("test", "", "f1", "", return_type="pandas")
+scores_models.iget("test", "", "f1", "", return_type="pandas").round(2)
 ```
 
 
@@ -318,18 +318,18 @@ scores_models.iget("test", "", "f1", "", return_type="pandas")
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>0.918919</td>
-      <td>0.914286</td>
+      <td>0.89</td>
+      <td>0.89</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.647059</td>
-      <td>0.588235</td>
+      <td>0.61</td>
+      <td>0.47</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.689655</td>
-      <td>0.645161</td>
+      <td>0.71</td>
+      <td>0.62</td>
     </tr>
   </tbody>
 </table>
@@ -339,7 +339,7 @@ scores_models.iget("test", "", "f1", "", return_type="pandas")
 
 
 ```python
-scores_models.iget("", "", "f1", "logistic regression", return_type="pandas")
+scores_models.iget("", "", "f1", "logistic regression", return_type="pandas").round(2)
 ```
 
 
@@ -371,15 +371,15 @@ scores_models.iget("", "", "f1", "logistic regression", return_type="pandas")
   <tbody>
     <tr>
       <th>train</th>
-      <td>0.952381</td>
-      <td>0.732394</td>
-      <td>0.757576</td>
+      <td>0.92</td>
+      <td>0.73</td>
+      <td>0.77</td>
     </tr>
     <tr>
       <th>test</th>
-      <td>0.914286</td>
-      <td>0.588235</td>
-      <td>0.645161</td>
+      <td>0.89</td>
+      <td>0.47</td>
+      <td>0.62</td>
     </tr>
   </tbody>
 </table>
@@ -405,13 +405,13 @@ scores_rf.iset(metrics(y_test, yhat), "test", "", "")
 
 
 
-    <hyperframe.HyperFrame at 0x7f400b3e6940>
+    <hyperframe.HyperFrame at 0x7f38c18f0898>
 
 
 
 
 ```python
-scores_rf.iget("test", "", "", return_type="pandas")
+scores_rf.iget("test", "", "", return_type="pandas").round(2)
 ```
 
 
@@ -443,21 +443,21 @@ scores_rf.iget("test", "", "", return_type="pandas")
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>1.000000</td>
-      <td>0.842105</td>
-      <td>0.914286</td>
+      <td>0.95</td>
+      <td>0.95</td>
+      <td>0.95</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.590909</td>
-      <td>0.866667</td>
-      <td>0.702703</td>
+      <td>0.54</td>
+      <td>0.47</td>
+      <td>0.50</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.833333</td>
-      <td>0.625000</td>
-      <td>0.714286</td>
+      <td>0.61</td>
+      <td>0.69</td>
+      <td>0.65</td>
     </tr>
   </tbody>
 </table>
@@ -484,7 +484,7 @@ scores_models = scores_models.expand(scores_rf, "model", "random forest")
 
 
 ```python
-scores_models.iget("test", "", "f1", "", return_type="pandas")
+scores_models.iget("test", "", "f1", "", return_type="pandas").round(2)
 ```
 
 
@@ -516,21 +516,21 @@ scores_models.iget("test", "", "f1", "", return_type="pandas")
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>0.918919</td>
-      <td>0.914286</td>
-      <td>0.914286</td>
+      <td>0.89</td>
+      <td>0.89</td>
+      <td>0.95</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.647059</td>
-      <td>0.588235</td>
-      <td>0.702703</td>
+      <td>0.61</td>
+      <td>0.47</td>
+      <td>0.50</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.689655</td>
-      <td>0.645161</td>
-      <td>0.714286</td>
+      <td>0.71</td>
+      <td>0.62</td>
+      <td>0.65</td>
     </tr>
   </tbody>
 </table>

@@ -17,6 +17,11 @@ def nest(l, depth=1, reps=1):
     else:
         return([nest(l, depth-1, reps)] * reps)
 
+def unnest(l):
+    """unnest a nested list l"""
+    return([x for y in l for x in mlist(y)])
+
+
 
 def constant_array(constant, *args):
     """create an array filled with the 'constant' of shape *args"""
@@ -34,11 +39,6 @@ def zeros(*args):
 def ones(*args):
     """create a constant array of shape *args"""
     return(constant_array(1.0, *args))
-
-
-def unnest(l):
-    """unnest a nested list l"""
-    return([x for y in l for x in mlist(y)])
 
 
 def mlist(x):
@@ -96,13 +96,7 @@ class HyperFrame:
             data (np.array): data
         """
 
-        assert isinstance(dimension_labels, list)
-
-        for k, v in index_labels.items():
-            assert( isinstance(v, list))
-
         index_labels = OrderedDict(index_labels)
-
 
         self.dimension_labels = dimension_labels
         self.dim_labels = idict(dimension_labels)
@@ -115,12 +109,13 @@ class HyperFrame:
 
         if data is None:
             data = zeros(*[len(self.val_labels[dim_label]) for _, dim_label in self.dim_labels.items()])
-        
-        HyperFrame._validate_data(data, self.dim_labels, self.val_labels)
 
         self.data = data
 
         self.shape = data.shape
+
+        HyperFrame._validate_hyperframe(self)
+
 
 
     def copy(self):
@@ -198,6 +193,7 @@ class HyperFrame:
         indices = [[v2 for k2, v2 in sort_dict(hyperframe.val_labels[v])] 
                    for k, v in sort_dict(hyperframe.dim_labels)]
 
+        assert len(indices) > 0, "pandas objects must have at least one dimension"
         assert len(indices) <= 2, "pandas objects cannot have {} dimensions".format(len(indices))
 
         if len(indices) == 1:
@@ -243,10 +239,7 @@ class HyperFrame:
         """
         kwargs = self._build_kwargs(args, kwargs)
 
-        test1 = np.issubdtype(type(new_data), np.number)
-        test2 = np.issubdtype(type(self.iget(**kwargs).data), np.number)
-        test3 = isinstance(new_data, type(np.array([0])))
-        assert test3 or (test1 and test2)
+        assert np.issubdtype(type(new_data), np.number) or ( isinstance(new_data, type(np.array([0]))) and  new_data.shape)
         
         indices = self._construct_indices(kwargs, self.data.shape)
         self.data[np.ix_(*indices)] = new_data.reshape([len(x) for x in indices])
@@ -257,7 +250,7 @@ class HyperFrame:
 
         self_dimension_labels_subset = [label for label in self.dimension_labels if label in other.dimension_labels]
 
-        assert len(self_dimension_labels_subset) + int(expand) == len(self.dimension_labels)
+        assert (len(self_dimension_labels_subset) + int(expand)) == len(self.dimension_labels)
 
         for i, label in enumerate(self_dimension_labels_subset):
             assert label == other.dim_labels[i], "the dimension labels of self and other must be identical" 
@@ -285,14 +278,16 @@ class HyperFrame:
 
         """
 
+        HyperFrame._validate_hyperframe(other)
         self._validate_other(other, True)
 
-        dim_to_expand_on =  [(i, label) for i, label in self.dim_labels.items() if label not in other.dimension_labels]
+        dim_to_expand_on = [(i, label) for i, label in self.dim_labels.items() if label not in other.dimension_labels]
 
         assert len(dim_to_expand_on) == 1
 
         dim_different, dim_label_different = dim_to_expand_on[0]
 
+        assert dim_label_different == on_dimension
 
         assert new_index_label not in self.index_labels[dim_label_different], \
                 "the dimension with different val_labels cannot have overlapping val_labels"
@@ -322,6 +317,11 @@ class HyperFrame:
         other = mlist(other)
 
         assert new_dimension not in self.dimension_labels
+        assert len(new_dimension_index_labels) == (len(mlist(other)) + 1), \
+               "there must be as many new_dimension_index_labels as there are objects to merge"
+
+        assert len(new_dimension_index_labels) == len(set(new_dimension_index_labels)), \
+               "new_dimension_index_labels must be unique"
 
         for other_ in other:
             self._validate_other(other_, False)
@@ -354,7 +354,15 @@ class HyperFrame:
 
     def _build_kwargs(self, args, kwargs):
 
-        assert len(args) == 0 or (len(args) == len(self.dim_labels) and len(kwargs)==0)
+        assert (len(args) == 0 and len(kwargs) > 0) or (len(args) == len(self.dim_labels) and len(kwargs)==0)
+
+        for i, arg in enumerate(args):
+            if arg not in self.index_labels[self.dim_labels[i]] and arg != "":
+                raise ValueError("{} is not a valid index_label for {}".format(arg, self.dim_labels[i]))
+
+        assert len(kwargs) == 0 or np.all([k in self.dimension_labels and
+                                           np.all([v_ in self.index_labels[k] for v_ in mlist(v)])
+                                           for k, v in kwargs.items()])
 
         kwargs = [(k, mlist(v)) for k, v in kwargs.items()]
 
@@ -362,14 +370,7 @@ class HyperFrame:
                                                         else self.index_labels[self.dim_labels[i]])
                          for i, v in enumerate(args)]
 
-
         kwargs = OrderedDict(kwargs + args_to_kwargs)
-
-        for i, arg in enumerate(args):
-            if arg not in self.index_labels[self.dim_labels[i]] and arg != "":
-                raise ValueError("{} is not a valid index_label for {}".format(arg, self.dim_labels[i]))
-
-
         self._validate_kwargs(kwargs)
 
         return(kwargs)   
@@ -394,19 +395,26 @@ class HyperFrame:
         
     
     @staticmethod
-    def _validate_data(data, dim_labels, val_labels):
+    def _validate_hyperframe(hyperframe):
 
-        assert isinstance(data, type(np.array([0]))) or np.issubdtype(type(data), np.number)
+        assert isinstance(hyperframe.dimension_labels, list)
+        assert len(hyperframe.dimension_labels) > 0
+
+        assert isinstance(hyperframe.index_labels, OrderedDict)
+        assert len(hyperframe.index_labels) > 0
+        assert np.all([isinstance(v, list) for k, v in hyperframe.index_labels.items()])
+
+        assert len(hyperframe.dimension_labels) == len(hyperframe.index_labels)
+
+        HyperFrame._validate_dict(hyperframe.dim_labels, len(hyperframe.data.shape))
         
-        assert len(dim_labels) == len(val_labels)
-        
-        HyperFrame._validate_dict(dim_labels, len(data.shape))
-        
-        for dim, dim_label in dim_labels.items():
-            assert dim_label in val_labels.keys()
-            
-            HyperFrame._validate_dict(val_labels[dim_label], data.shape[dim])
-    
+        for dim, dim_label in hyperframe.dim_labels.items():
+            assert dim_label in hyperframe.val_labels.keys()
+            HyperFrame._validate_dict(hyperframe.val_labels[dim_label], hyperframe.data.shape[dim])
+
+        assert isinstance(hyperframe.data, type(np.array([0])))
+
+      
     @staticmethod
     def _validate_dict(dict_, dims):
 
@@ -415,9 +423,7 @@ class HyperFrame:
         
     @staticmethod
     def _dense_keys(dict_):
-
-        dict_keys = dict_.keys()
-        return np.all([x in dict_keys for x in range(len(dict_))])
+        return np.all([x in dict_.keys() for x in range(len(dict_))])
 
     @staticmethod
     def _strip_path(path):
@@ -425,8 +431,8 @@ class HyperFrame:
         filename = path.split("/")[-1]
         if "." in filename and filename.split(".")[:-1] in ["csv", "txt", "hyperframe"]:
             path = ".".join(path.split(".")[:-1]) 
-
             warnings.warn("path changed to: {}".format(path))
+
         return(path)
 
 
