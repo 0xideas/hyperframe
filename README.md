@@ -138,7 +138,6 @@ scores.iget(species="versicolor", return_type="pandas").round(2)
 
 
 <div>
-
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
