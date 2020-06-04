@@ -116,7 +116,41 @@ class HyperFrame:
 
         HyperFrame._validate_hyperframe(self)
 
+    def len(self, *args):
+        return([self.shape[self.rdim_labels[a]] for a in args])
 
+    def sum(self, *args):
+        return(self.apply_f1(np.sum, *args))
+
+    def mean(self, *args):
+        return(self.apply_f1(np.mean, *args))
+
+    def min(self, *args):
+        return(self.apply_f1(np.min, *args))
+
+    def max(self, *args):
+        return(self.apply_f1(np.max, *args))
+
+    def apply_f1(self, f, *args):
+        if len(args) == 0:
+            args = self.dimension_labels
+            
+        assert np.all([a in self.dimension_labels for a in args])
+        dims = sorted([self.rdim_labels[a] for a in args])
+
+        ndata = self.data
+        for i, dim in enumerate(dims):
+            ndata = f(ndata, dim-i)
+
+        if isinstance(ndata, type(np.array([0]))):
+            new_dimension_labels = [d for d in self.dimension_labels if d not in args]
+            new_index_labels = OrderedDict([(k, v) for k, v in self.index_labels.items() if k not in args])
+
+            return(HyperFrame(new_dimension_labels, new_index_labels, ndata))
+        else:
+            assert np.issubdtype(type(ndata), np.number)
+
+            return(ndata)
 
     def copy(self):
         """

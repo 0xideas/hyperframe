@@ -64,7 +64,7 @@ scores.iset(metrics(y_train, yhat), "train", "", "")
 
 
 
-    <hyperframe.HyperFrame at 0x7f38c19d9eb8>
+    <hyperframe.HyperFrame at 0x7ff4d4241320>
 
 
 
@@ -78,7 +78,7 @@ scores.iset(metrics(y_test, yhat), train_test="test")
 
 
 
-    <hyperframe.HyperFrame at 0x7f38c19d9eb8>
+    <hyperframe.HyperFrame at 0x7ff4d4241320>
 
 
 
@@ -119,21 +119,21 @@ scores.iget("train", "", "", return_type="pandas").round(2)
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>0.97</td>
-      <td>0.90</td>
-      <td>0.93</td>
+      <td>0.89</td>
+      <td>1.00</td>
+      <td>0.94</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.74</td>
-      <td>0.91</td>
-      <td>0.82</td>
+      <td>0.71</td>
+      <td>0.71</td>
+      <td>0.71</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.93</td>
-      <td>0.76</td>
-      <td>0.84</td>
+      <td>0.80</td>
+      <td>0.71</td>
+      <td>0.75</td>
     </tr>
   </tbody>
 </table>
@@ -176,15 +176,15 @@ scores.iget(species="versicolor", return_type="pandas").round(2)
   <tbody>
     <tr>
       <th>train</th>
-      <td>0.74</td>
-      <td>0.91</td>
-      <td>0.82</td>
+      <td>0.71</td>
+      <td>0.71</td>
+      <td>0.71</td>
     </tr>
     <tr>
       <th>test</th>
+      <td>0.70</td>
+      <td>0.47</td>
       <td>0.56</td>
-      <td>0.67</td>
-      <td>0.61</td>
     </tr>
   </tbody>
 </table>
@@ -230,15 +230,15 @@ scores.iget0("species", "train_test", return_type="pandas").round(2)
   <tbody>
     <tr>
       <th>train</th>
-      <td>0.97</td>
-      <td>0.74</td>
-      <td>0.93</td>
+      <td>0.89</td>
+      <td>0.71</td>
+      <td>0.80</td>
     </tr>
     <tr>
       <th>test</th>
-      <td>0.94</td>
-      <td>0.56</td>
-      <td>0.73</td>
+      <td>0.95</td>
+      <td>0.70</td>
+      <td>0.65</td>
     </tr>
   </tbody>
 </table>
@@ -264,7 +264,7 @@ scores_lr.iset(metrics(y_test, yhat), "test", "", "")
 
 
 
-    <hyperframe.HyperFrame at 0x7f38c18f01d0>
+    <hyperframe.HyperFrame at 0x7ff4d4231588>
 
 
 
@@ -318,18 +318,18 @@ scores_models.iget("test", "", "f1", "", return_type="pandas").round(2)
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>0.89</td>
-      <td>0.89</td>
+      <td>0.97</td>
+      <td>0.95</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.61</td>
-      <td>0.47</td>
+      <td>0.56</td>
+      <td>0.58</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.71</td>
-      <td>0.62</td>
+      <td>0.72</td>
+      <td>0.72</td>
     </tr>
   </tbody>
 </table>
@@ -372,14 +372,14 @@ scores_models.iget("", "", "f1", "logistic regression", return_type="pandas").ro
     <tr>
       <th>train</th>
       <td>0.92</td>
-      <td>0.73</td>
-      <td>0.77</td>
+      <td>0.74</td>
+      <td>0.78</td>
     </tr>
     <tr>
       <th>test</th>
-      <td>0.89</td>
-      <td>0.47</td>
-      <td>0.62</td>
+      <td>0.95</td>
+      <td>0.58</td>
+      <td>0.72</td>
     </tr>
   </tbody>
 </table>
@@ -405,7 +405,7 @@ scores_rf.iset(metrics(y_test, yhat), "test", "", "")
 
 
 
-    <hyperframe.HyperFrame at 0x7f38c18f0898>
+    <hyperframe.HyperFrame at 0x7ff4d41cd978>
 
 
 
@@ -449,15 +449,15 @@ scores_rf.iget("test", "", "", return_type="pandas").round(2)
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.54</td>
-      <td>0.47</td>
-      <td>0.50</td>
+      <td>0.75</td>
+      <td>0.40</td>
+      <td>0.52</td>
     </tr>
     <tr>
       <th>virginica</th>
       <td>0.61</td>
-      <td>0.69</td>
-      <td>0.65</td>
+      <td>0.88</td>
+      <td>0.72</td>
     </tr>
   </tbody>
 </table>
@@ -516,25 +516,122 @@ scores_models.iget("test", "", "f1", "", return_type="pandas").round(2)
   <tbody>
     <tr>
       <th>setosa</th>
-      <td>0.89</td>
-      <td>0.89</td>
+      <td>0.97</td>
+      <td>0.95</td>
       <td>0.95</td>
     </tr>
     <tr>
       <th>versicolor</th>
-      <td>0.61</td>
-      <td>0.47</td>
-      <td>0.50</td>
+      <td>0.56</td>
+      <td>0.58</td>
+      <td>0.52</td>
     </tr>
     <tr>
       <th>virginica</th>
-      <td>0.71</td>
-      <td>0.62</td>
-      <td>0.65</td>
+      <td>0.72</td>
+      <td>0.72</td>
+      <td>0.72</td>
     </tr>
   </tbody>
 </table>
 </div>
+
+
+
+# Simple Mathematical Operations
+
+
+```python
+scores.max("train_test").iget("", "", return_type="pandas")
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>precision</th>
+      <th>recall</th>
+      <th>f1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>setosa</th>
+      <td>0.950000</td>
+      <td>1.000000</td>
+      <td>0.974359</td>
+    </tr>
+    <tr>
+      <th>versicolor</th>
+      <td>0.714286</td>
+      <td>0.714286</td>
+      <td>0.714286</td>
+    </tr>
+    <tr>
+      <th>virginica</th>
+      <td>0.800000</td>
+      <td>0.812500</td>
+      <td>0.750000</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+
+```python
+scores.min("train_test", "metric").iget("", return_type="pandas")
+```
+
+
+
+
+    setosa        0.885714
+    versicolor    0.466667
+    virginica     0.650000
+    dtype: float64
+
+
+
+
+```python
+scores.mean("train_test", "species", "metric")
+```
+
+
+
+
+    0.7810886435641339
+
+
+
+
+```python
+scores.sum()
+```
+
+
+
+
+    14.059595584154408
 
 
 
