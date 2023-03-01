@@ -280,7 +280,7 @@ class HyperFrame:
             
         return(self)
 
-    def _validate_other(self, other, expand):
+    def _validate_other(self, other, expand, concatenate=False):
 
         self_dimension_labels_subset = [label for label in self.dimension_labels if label in other.dimension_labels]
 
@@ -293,7 +293,7 @@ class HyperFrame:
                                           np.array(other.rval_labels[label].keys()))
                          for label in self_dimension_labels_subset]
 
-        assert np.all(dims_identical)
+        assert np.sum(dims_identical) == len(dims_identical)-int(concatenate), dims_identical
 
 
     def expand(self, other, on_dimension, new_index_label):
@@ -333,6 +333,44 @@ class HyperFrame:
 
         return(HyperFrame(self.dimension_labels, new_index_labels, new_data))
 
+    def expand2(self, other, on_dimension):
+        """
+        Expand this HyperFrame along one dimension with another HyperFrame
+
+        Parameters:
+            other (HyperFrame): another HyperFrame with identical 'dimension_labels' and identical 'index_labels'
+                                except for on one dimension: On that dimension, the 'index_labels' of other do
+                                not overlap with those of self
+            on_dimension (string): dimension label on which other is "tacked on"
+        Returns:
+            HyperFrame: A new HyperFrame with additional index labels and data on one dimension
+
+        """
+
+        HyperFrame._validate_hyperframe(other)
+        self._validate_other(other, False, True)
+
+        dim_to_expand_on = [(i, label) for i, label in self.dim_labels.items() if len(set(self.index_labels[label]).intersection(set(other.index_labels[label]))) == 0]
+
+        assert len(dim_to_expand_on) == 1
+
+        dim_different, dim_label_different = dim_to_expand_on[0]
+
+        assert dim_label_different == on_dimension
+
+        new_index_labels = other.index_labels[on_dimension]
+        for new_index_label in new_index_labels:
+        	assert new_index_label not in self.index_labels[dim_label_different], \
+                "the dimension with different val_labels cannot have overlapping val_labels"
+
+        new_index_labels = OrderedDict(self.index_labels)
+        new_index_labels[dim_label_different] += other.index_labels[dim_label_different]
+
+        new_data = np.concatenate([self.data, other.data], axis=dim_different)
+        print(self.data.shape)
+        print(other.data.shape)
+        print(new_data.shape)
+        return(HyperFrame(self.dimension_labels, new_index_labels, new_data))
 
     def merge(self, other, new_dimension, new_dimension_index_labels):
         """
@@ -388,15 +426,15 @@ class HyperFrame:
 
     def _build_kwargs(self, args, kwargs):
 
-        assert (len(args) == 0 and len(kwargs) > 0) or (len(args) == len(self.dim_labels) and len(kwargs)==0)
+
+        assert (len(args) == 0 and len(kwargs) > 0) or (len(args) == len(self.dim_labels) and len(kwargs)==0), (args, kwargs)
 
         for i, arg in enumerate(args):
             if arg not in self.index_labels[self.dim_labels[i]] and arg != "":
                 raise ValueError("{} is not a valid index_label for {}".format(arg, self.dim_labels[i]))
 
-        assert len(kwargs) == 0 or np.all([k in self.dimension_labels and
-                                           np.all([v_ in self.index_labels[k] for v_ in mlist(v)])
-                                           for k, v in kwargs.items()])
+        test = [[v_ in self.index_labels[k] for v_ in mlist(v)] for k, v in kwargs.items()]
+        assert len(kwargs) == 0 or np.all([k in self.dimension_labels and np.all(test) for k in kwargs.keys()]), test
 
         kwargs = [(k, mlist(v)) for k, v in kwargs.items()]
 
@@ -505,7 +543,7 @@ class HyperFrame:
 
         dir_ = os.path.join(path + str(np.random.uniform())[2:], "")
 
-        shutil.unpack_archive(path+".zip", dir_)
+        shutil.unpack_archive(path, dir_)
 
         try:
             data = np.load(os.path.join(dir_, "data.npy"))
